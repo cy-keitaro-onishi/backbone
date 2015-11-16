@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf8'>
+  <title>Backbone Test Suite</title>
+</head>
+<body>
+  <script src="vendor/jquery.js"></script>
+  <script src="vendor/underscore.js"></script>
+  <script src="../backbone.js"></script>
+<script>
+
+//////////////////////////////////////////
+// シンプルな例
+//////////////////////////////////////////
+
+A = {};
+_.extend(A, Backbone.Events);
+
+// bindはonのalias
+A.on('foo', function(){
+    console.log('A::foo');
+});
+A.bind('bar', function(){
+    console.log('A::bar');
+});
+
+A.trigger('foo');
+A.trigger('bar');
+
+delete A;
+
+console.log('---------------------');
+
+//////////////////////////////////////////
+// .listenToを利用した例
+//////////////////////////////////////////
+AA = new Backbone.Model();
+BB = new Backbone.View();
+BB.name = 'bb';
+
+BB.listenTo(AA, 'foo', function(){
+  console.log(this.name);
+});
+AA.trigger('foo');
+
+// BB.removeのタイミングでAAに貼られたイベントも開放する
+BB.remove();
+AA.trigger('foo');
+
+delete AA;
+delete BB;
+console.log('---------------------');
+
+//////////////////////////////////////////
+// .listenToを使用せず.onで↑と同じことをするとどうなるか
+//////////////////////////////////////////
+AA = new Backbone.Model();
+BB = new Backbone.View();
+BB.name = 'bb';
+
+AA.on('foo', function(){
+  console.log(this.name);
+}, BB);
+AA.trigger('foo');
+
+BB.remove();
+AA.trigger('foo');
+
+// 見ての通り、AAのfooイベントにはBBのcontextがまだ存在していることになる
+// これをZombieViewという。メモリ管理上、非効率である
+console.log(AA._events.foo[0]);
+
+console.log('---------------------');
+</script>
+</body>
+</html>
