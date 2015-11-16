@@ -531,6 +531,8 @@
   var Model = Backbone.Model = function(attributes, options) {
     var attrs = attributes || {};
     options || (options = {});
+
+    // new される度にユニークなIDをインスタンスに割り振る
     this.cid = _.uniqueId(this.cidPrefix);
     this.attributes = {};
     if (options.collection) this.collection = options.collection;
@@ -560,9 +562,11 @@
 
     // Initialize is an empty function by default. Override it with your own
     // initialization logic.
+    // 実はinitializeは標準では何もしていない
     initialize: function(){},
 
     // Return a copy of the model's `attributes` object.
+    // 実はtoJSONはattributesをcloneしているだけ
     toJSON: function(options) {
       return _.clone(this.attributes);
     },
@@ -601,20 +605,30 @@
       if (key == null) return this;
 
       // Handle both `"key", value` and `{key: value}` -style arguments.
+      // key, value. {key: value}の両方のパラメータの受け方をサポートしている
+      // 要は引数の順番をずらしているだけである
       var attrs;
       if (typeof key === 'object') {
         attrs = key;
         options = val;
       } else {
+        // var a;
+        // (a = {})['hoge'] = 'fuga';
+        // a -> { hoge: 'fuga' }となる
         (attrs = {})[key] = val;
       }
 
       options || (options = {});
 
       // Run validation.
+      // validationによってコケた場合はthisではなく、falseがかえるので注意
+      // しかし、ここで疑問なのが、validationでコケた場合はinvalidイベントが発行されるのでわざわざfalseを返す意味はあるのか
       if (!this._validate(attrs, options)) return false;
 
       // Extract attributes and options.
+      // オプションの引数には、unset, silentの2つのパラメタが有る
+      // unset -> 指定したkeyを削除したい場合に利用する
+      // silent -> attributes変更時のchangeイベントを発行しないようにする
       var unset      = options.unset;
       var silent     = options.silent;
       var changes    = [];
@@ -649,6 +663,7 @@
       if (!silent) {
         if (changes.length) this._pending = options;
         for (var i = 0; i < changes.length; i++) {
+          // 更新したメンバの数changeイベントを発火させている
           this.trigger('change:' + changes[i], this, current[changes[i]], options);
         }
       }
@@ -656,6 +671,9 @@
       // You might be wondering why there's a `while` loop here. Changes can
       // be recursively nested within `"change"` events.
       if (changing) return this;
+
+      // silent: trueをしていない場合はchangeイベントは発火させない
+      // また、pending状態でない場合もchangeイベントは発火しない
       if (!silent) {
         while (this._pending) {
           options = this._pending;
@@ -670,11 +688,13 @@
 
     // Remove an attribute from the model, firing `"change"`. `unset` is a noop
     // if the attribute doesn't exist.
+    // unsetは特定のメンバを削除する
     unset: function(attr, options) {
       return this.set(attr, void 0, _.extend({}, options, {unset: true}));
     },
 
     // Clear all attributes on the model, firing `"change"`.
+    // clearはすべてのメンバを削除する
     clear: function(options) {
       var attrs = {};
       for (var key in this.attributes) attrs[key] = void 0;
@@ -715,12 +735,18 @@
 
     // Get all of the attributes of the model at the time of the previous
     // `"change"` event.
+    // .setする1つまえのattributesの状態を取得することができる
     previousAttributes: function() {
       return _.clone(this._previousAttributes);
     },
 
     // Fetch the model from the server, merging the response with the model's
     // local attributes. Any changed attributes will trigger a "change" event.
+    // fetch/save/destroyに関してはRestなAPIの実行するためのヘルパーである
+    // Backbone.jsのここの仕組みを考慮したRestなAPIでは効果を発揮するがAPIの仕様がそれに合わない場合は何の役にも立たない
+    // ここの仕組みをあえて、ユーザーのWebStorage領域に対するfetch/save/destroyなどに振る舞いを変えることをすれば別のいい使い方が有るかもしれない
+    // 実際にそれをやっているっぽいライブラリも有る
+    // https://github.com/jeromegn/Backbone.localStorage
     fetch: function(options) {
       options = _.extend({parse: true}, options);
       var model = this;
@@ -835,11 +861,16 @@
 
     // **parse** converts a response into the hash of attributes to be `set` on
     // the model. The default implementation is just to pass the response along.
+    // parseはAPIのレスポンスをModel自身が都合のいい形に変換するものであり
+    // ユーザーによってOverrideされることを期待している
     parse: function(resp, options) {
       return resp;
     },
 
     // Create a new model with identical attributes to this one.
+    // Model.cloneを行うことによってコンストラクタを呼ぶことができるので
+    // idの採番が行われる
+    // _.cloneは使わないようにしましょう. 思ってもいないイベントが発火するおそれがある
     clone: function() {
       return new this.constructor(this.attributes);
     },
@@ -856,6 +887,8 @@
 
     // Run validation against the next complete set of model attributes,
     // returning `true` if all is well. Otherwise, fire an `"invalid"` event.
+    // ルールに反した場合はinvalidイベントが発火する
+    // _validate自体は.setのときに呼ばれている
     _validate: function(attrs, options) {
       if (!options.validate || !this.validate) return true;
       attrs = _.extend({}, this.attributes, attrs);
@@ -869,6 +902,8 @@
 
   // Underscore methods that we want to implement on the Model, mapped to the
   // number of arguments they take.
+  // 以下のunderscore.jsで提供されているメソッドをModel.で使えるようにしている
+  // _(args)として与えられる変数はModel.attributesになるのでAPIを実行しやすい
   var modelMethods = { keys: 1, values: 1, pairs: 1, invert: 1, pick: 0,
       omit: 0, chain: 1, isEmpty: 1 };
 
