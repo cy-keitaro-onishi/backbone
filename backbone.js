@@ -53,8 +53,8 @@
 
   // Save the previous value of the `Backbone` variable, so that it can be
   // restored later on, if `noConflict` is used.
-  // Backbone.noConflictにおいて今回生成したBackboneのオブジェクトを参照することができるようになります
-  // これはすでにglobalの領域にBackboneが存在した際に、既存のBackboneはなく、今回生成するBackboneの参照を見ることができるようになります
+  // Backbone.noConflictにおいてすでに存在していたBackboneのオブジェクトを参照することができるようになります
+  // これはすでにglobalの領域にBackboneが存在した際に、今回生成したのBackboneはなく、今回生成するBackboneの1つ前に存在していたBackboneの参照を見ることができるようになります
   var previousBackbone = root.Backbone;
 
   // Create a local reference to a common array method we'll want to use later.
@@ -71,7 +71,6 @@
 
   // Runs Backbone.js in *noConflict* mode, returning the `Backbone` variable
   // to its previous owner. Returns a reference to this Backbone object.
-  // noConflictを実行することで既存のroot.Backboneを新しく読み込んだBackboneのオブジェクトで上書きすることができる
   Backbone.noConflict = function() {
     root.Backbone = previousBackbone;
     return this;
