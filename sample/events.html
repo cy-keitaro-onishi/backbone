@@ -72,6 +72,52 @@ AA.trigger('foo');
 console.log(AA._events.foo[0]);
 
 console.log('---------------------');
+
+//////////////////////////////////////////
+// 複数の名前を持ったイベントを登録することができる
+//////////////////////////////////////////
+
+AAA = {};
+_.extend(AAA, Backbone.Events);
+
+AAA.on('hoge fuga piyo', function(){
+    console.log('hello');
+});
+
+// さて、helloは何回実行されるでしょうか
+AAA.trigger('hoge');
+AAA.trigger('fuga');
+AAA.trigger('piyo');
+AAA.trigger('hoge fuga');
+AAA.trigger('hoge fuga piyo');
+
+delete AAA;
+
+console.log('---------------------');
+
+//////////////////////////////////////////
+// イベント名『all』は特別な動きをする
+//////////////////////////////////////////
+
+AAAA = {};
+_.extend(AAAA, Backbone.Events);
+
+AAAA.on('hoge', function(){
+    console.log('hey');
+});
+AAAA.on('all', function(){
+    console.log('hey');
+});
+
+// さて、heyは何回実行されるでしょうか
+AAAA.trigger('hoge');
+AAAA.trigger('all');
+AAAA.trigger('hey');
+
+
+delete AAAA;
+
+console.log('---------------------');
 </script>
 </body>
 </html>

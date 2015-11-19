@@ -7,6 +7,7 @@
 //
 //     ソースコードリーディングにおいての参考資料
 //     - http://www.tejitak.com/blog/?p=1495
+//     - https://github.com/enja-oss/Backbone/blob/master/backbone.js
 
 (function(factory) {
 
@@ -162,11 +163,10 @@
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
   // Events.
-  // 色々なBackboneが用意するオブジェクトがオブザーバーパターンを利用することができるようにするための
+  // 色々なBackboneが用意するオブジェクトがObserverパターンを利用することができるようにするための
   // 根幹の処理を提供するためのクラス
   // Model, CollectionなどはすべてEventsを継承している
   //
-  // ex) オブザーバーパターン
   // A = {};
   // _.extend(A, Backbone.Events);
   // A.on('foo', function(){
@@ -200,7 +200,8 @@
   // Iterates over the standard `event, callback` (as well as the fancy multiple
   // space-separated events `"change blur", callback` and jQuery-style event
   // maps `{event: callback}`).
-  // iterateeにはイベント登録・削除などの処理を行うための関数オブジェクトが入ってくる
+  // iterateeにはイベント登録・削除・購読・発行などの処理を行うための関数オブジェクトが入ってくる
+  // イベントの登録・削除・購読・発行などはすべてこの関数を実行することになっている
   var eventsApi = function(iteratee, events, name, callback, opts) {
     var i = 0, names;
     if (name && typeof name === 'object') {
@@ -211,6 +212,21 @@
       }
     } else if (name && eventSplitter.test(name)) {
       // Handle space separated event names by delegating them individually.
+      // イベント名をスペースで区切った文字列にしている場合はスペースで区切って複数の名前でイベントを登録することができる
+      //
+      // ```
+      // AAA.on('hoge fuga piyo', function(){
+      //     console.log('hello');
+      // });
+      //
+      // AAA.trigger('hoge');
+      // AAA.trigger('fuga');
+      // AAA.trigger('piyo');
+      // AAA.trigger('hoge fuga');
+      // AAA.trigger('hoge fuga piyo');
+      // ```
+      // さて、helloは何回実行されるでしょうか。この辺がかなりとっつきづらいのスペースを用いたイベント名は使わないのが良いかもしれない
+      //
       for (names = name.split(eventSplitter); i < names.length; i++) {
         events = iteratee(events, names[i], callback, opts);
       }
@@ -223,17 +239,24 @@
 
   // Bind an event to a `callback` function. Passing `"all"` will bind
   // the callback to all events fired.
-  // イベント名、イベント発火時の処理となるcallback、callback実行時のcontext
-  // onでは単純に.triggerを叩いて明示的にcallbackを発火させることしかできない
+  // イベント登録に必要なのは、イベント名、イベント発火時の処理となるcallback、callback実行時のcontext
   Events.on = function(name, callback, context) {
     return internalOn(this, name, callback, context);
   };
 
   // Guard the `listening` argument from the public API.
-  // 渡されたオブジェクトに対して渡されたイベントを購読させる
-  // 具体的にはオブジェクトのイベント情報を.eventsに格納している
+  // 渡されたオブジェクトに対して渡されたイベントを登録する
+  // 具体的にはオブジェクトのイベント情報を_eventsに格納している
+  // listeningに関しては購読者も登録するべき時は購読者のオブジェクトが入ってくる
   var internalOn = function(obj, name, callback, context, listening) {
+
+    // onApiとやらは下の方にいる
+    // イベント周りの処理(登録・削除)とかは全部eventsApiに対して、何らかの処理用の関数を渡すことで提供されている。
     obj._events = eventsApi(onApi, obj._events || {}, name, callback, {
+
+        // context   : イベント発行者のcontext
+        // ctx       : イベントのcallbackで利用されるcontext
+        // listening : イベント購読者のcontext
         context: context,
         ctx: obj,
         listening: listening
@@ -250,13 +273,16 @@
   // Inversion-of-control versions of `on`. Tell *this* object to listen to
   // an event in another object... keeping track of what it's listening to
   // for easier unbinding later.
-  // オブジェクトに対するイベントを他のオブジェクトに監視させることができる
-  // 例えば、ModelのイベントをViewに監視させ、Viewが破棄されるタイミングでModelのイベントを破棄することができる
+  // オブジェクトに対するイベントを他のオブジェクトに購読させることができる
+  // 例えば、ModelのイベントをViewに購読させ、Viewが破棄されるタイミングでModelのイベントを破棄することができる
   // listenToではなく、onを使ってModelのイベントにてViewの参照を渡してしまうとViewを削除してもModel側でViewの参照を持ってしまう(イベントが破棄されない)
   //
   // //////////////////////////////////////////
   // // .listenToを利用した例
+  // // Observerパターン
   // //////////////////////////////////////////
+  // AAは発行者
+  // BBは購読者
   // AA = new Backbone.Model();
   // BB = new Backbone.View();
   // BB.name = 'bb';
@@ -318,7 +344,7 @@
   //   callback  : Function : イベント発火時の処理
   //   context   : Object   : イベント登録されるオブジェクトのcontext
   //   ctx       : Object   : イベント発火時のcontext
-  //   listening : Object   : @TODO
+  //   listening : Object   : 監視者が存在する場合は監視者の登録も行う
   // }
   var onApi = function(events, name, callback, options) {
     if (callback) {
@@ -429,6 +455,7 @@
   // the callback is invoked, its listener will be removed. If multiple events
   // are passed in using the space-separated syntax, the handler will fire
   // once for each event, not once for a combination of all events.
+  // 1回ポッキリのイベント登録
   Events.once =  function(name, callback, context) {
     // Map the event into a `{event: once}` object.
     var events = eventsApi(onceMap, {}, name, callback, _.bind(this.off, this));
@@ -436,6 +463,7 @@
   };
 
   // Inversion-of-control versions of `once`.
+  // 1回ポッキリのイベント購読
   Events.listenToOnce =  function(obj, name, callback) {
     // Map the event into a `{event: once}` object.
     var events = eventsApi(onceMap, {}, name, callback, _.bind(this.stopListening, this, obj));
@@ -474,11 +502,37 @@
   };
 
   // Handles triggering the appropriate event callbacks.
+  //
+  // イベントを発火させるためのAPI
+  // オブジェクトに登録されていたイベントをガバッと持ってきてnameと呼ばれているイベント名から
+  // 発火対象のイベント選定して登録されていたcallbackを実行するだけだが、少し注意が必要
+  //
+  //////////////////////////////////////////
+  // イベント名『all』は特別な動きをする
+  //////////////////////////////////////////
+  // 
+  // AAAA = {};
+  // _.extend(AAAA, Backbone.Events);
+  // 
+  // AAAA.on('hoge', function(){
+  //     console.log('hey');
+  // });
+  // AAAA.on('all', function(){
+  //     console.log('hey');
+  // });
+  // 
+  // // さて、heyは何回実行されるでしょうか
+  // AAAA.trigger('hoge');
+  // AAAA.trigger('all');
+  // AAAA.trigger('hey');
   var triggerApi = function(objEvents, name, cb, args) {
     if (objEvents) {
       var events = objEvents[name];
       var allEvents = objEvents.all;
       if (events && allEvents) allEvents = allEvents.slice();
+
+      // まずマッチしたイベントを実行し
+      // その後にallで登録されていたイベントを実行する
       if (events) triggerEvents(events, args);
       if (allEvents) triggerEvents(allEvents, [name].concat(args));
     }
@@ -489,10 +543,11 @@
   // triggering events. Tries to keep the usual cases speedy (most internal
   // Backbone events have 3 arguments).
   //
-  // ここが非常に面白い
   // Function.callの方がFunction.applyより早いから変数の数が3までの間はcallを使うようにして静的な最適化を行なっている
   // それ以上の場合はcase分を書ききれないため、applyに頼っている
   // ちなみにBackbone純正のイベントは3までで収まっているようだ
+  // addMethod()と同じような感じですかね。
+  //
   var triggerEvents = function(events, args) {
     var ev, i = -1, l = events.length, a1 = args[0], a2 = args[1], a3 = args[2];
     switch (args.length) {
