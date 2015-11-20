@@ -582,18 +582,35 @@
 
   // Create a new model with the specified attributes. A client id (`cid`)
   // is automatically generated and assigned for you.
+  // こっからModelの処理
+  // Modelの今コンストラクタでは初期のattributesとoptionsを渡すことができる
+  // options.collection: .collectionメンバを持つかどうか、.collectionの仕組みはまだ不明
+  // options.parse: attributesの内容を加工するための処理を挟ませるかどうか。
+  //                具体的には.parse()をOverrideさせてユーザーが定義する必要がある
+  //
+  //
   var Model = Backbone.Model = function(attributes, options) {
     var attrs = attributes || {};
     options || (options = {});
 
     // new される度にユニークなIDをインスタンスに割り振る
+    // 参照の関係を解決するために利用すると思うが具体的には未だ不明
     this.cid = _.uniqueId(this.cidPrefix);
     this.attributes = {};
     if (options.collection) this.collection = options.collection;
     if (options.parse) attrs = this.parse(attrs, options) || {};
+
+    // .defaults()に定義しているデフォルトで利用するattributesを持ってきて引数で与えられたattrsとマージしている
+    // 引数のattributesの方が優先されます。
     attrs = _.defaults({}, attrs, _.result(this, 'defaults'));
     this.set(attrs, options);
     this.changed = {};
+
+    // initialize()を実行することでユーザーが定義できるコンストラクタ関数を実行する
+    // initialize()はnew XXX();の一番最後に評価されることを覚えておこう。
+    // 要はnewでも.set();をすでに実行しているため、initializeでは.set()が発生しないほうがイベントの発行回数を減らすことができます。
+    // あと、initializeの戻り値に対しては何も期待していないので、Overrideして何か使っても良いかもしれない。
+    // Applicationの試用によってはこの辺重宝すると思うんだけどな
     this.initialize.apply(this, arguments);
   };
 
@@ -632,22 +649,27 @@
     },
 
     // Get the value of an attribute.
+    // 単純にkey:valueを取得するだけなのでlodashの.getみたいな強烈なことはできない。
+    // Lodash .get: https://lodash.com/docs#get
     get: function(attr) {
       return this.attributes[attr];
     },
 
     // Get the HTML-escaped value of an attribute.
+    // escapeは.getした内容をエスケープさせる
     escape: function(attr) {
       return _.escape(this.get(attr));
     },
 
     // Returns `true` if the attribute contains a value that is not null
     // or undefined.
+    // これもgetと同じくlodashみたいなことはできない
     has: function(attr) {
       return this.get(attr) != null;
     },
 
     // Special-cased proxy to underscore's `_.matches` method.
+    // _.iterateeに関してはaddMethodsの仕組みを使えないようだ
     matches: function(attrs) {
       return !!_.iteratee(attrs, this)(this.attributes);
     },
@@ -655,6 +677,9 @@
     // Set a hash of model attributes on the object, firing `"change"`. This is
     // the core primitive operation of a model, updating the data and notifying
     // anyone who needs to know about the change in state. The heart of the beast.
+    // optionsの引数には、unset, silentの2つのパラメタが有る
+    // unset -> 指定したkeyを削除したい場合に利用する
+    // silent -> attributes変更時のchangeイベントを発行しないようにする
     set: function(key, val, options) {
       if (key == null) return this;
 
@@ -677,6 +702,8 @@
       // Run validation.
       // validationによってコケた場合はthisではなく、falseがかえるので注意
       // しかし、ここで疑問なのが、validationでコケた場合はinvalidイベントが発行されるのでわざわざfalseを返す意味はあるのか
+      // Validationの仕組みを利用したい場合は.validate()をOverrideすること
+      // 間違っても._validate()をOverrideしてはいけない。やってしまうと、validイベントが飛ばなくなる
       if (!this._validate(attrs, options)) return false;
 
       // Extract attributes and options.
@@ -686,6 +713,9 @@
       var unset      = options.unset;
       var silent     = options.silent;
       var changes    = [];
+
+      // 一旦_changingをtrueにしてModelを更新中のステータスに切り替える
+      // 切り替える手前のステータスを知っておき、これを利用する
       var changing   = this._changing;
       this._changing = true;
 
@@ -749,6 +779,7 @@
 
     // Clear all attributes on the model, firing `"change"`.
     // clearはすべてのメンバを削除する
+    // .cidは使いまわされる
     clear: function(options) {
       var attrs = {};
       for (var key in this.attributes) attrs[key] = void 0;
@@ -757,6 +788,7 @@
 
     // Determine if the model has changed since the last `"change"` event.
     // If you specify an attribute name, determine if that attribute has changed.
+    // attrを指定しない場合はModelすべてのattrを対象に変更履歴が有るかを評価する
     hasChanged: function(attr) {
       if (attr == null) return !_.isEmpty(this.changed);
       return _.has(this.changed, attr);
@@ -768,6 +800,7 @@
     // persisted to the server. Unset attributes will be set to undefined.
     // You can also pass an attributes object to diff against the model,
     // determining if there *would be* a change.
+    // ちょっと後で確認する
     changedAttributes: function(diff) {
       if (!diff) return this.hasChanged() ? _.clone(this.changed) : false;
       var old = this._changing ? this._previousAttributes : this.attributes;
@@ -915,8 +948,9 @@
 
     // **parse** converts a response into the hash of attributes to be `set` on
     // the model. The default implementation is just to pass the response along.
-    // parseはAPIのレスポンスをModel自身が都合のいい形に変換するものであり
+    // parseはModelがnewされるとき渡されるatttibutesを加工する仕組みをユーザー自身が都合のいい形に変換するものであり
     // ユーザーによってOverrideされることを期待している
+    // sync関係のAPIを利用してModelの生成を行う場合に重宝される
     parse: function(resp, options) {
       return resp;
     },
@@ -924,7 +958,6 @@
     // Create a new model with identical attributes to this one.
     // Model.cloneを行うことによってコンストラクタを呼ぶことができるので
     // idの採番が行われる
-    // _.cloneは使わないようにしましょう. 思ってもいないイベントが発火するおそれがある
     clone: function() {
       return new this.constructor(this.attributes);
     },
@@ -935,6 +968,8 @@
     },
 
     // Check if the model is currently in a valid state.
+    // 今のModelの状態をvalidateするとどうなるかを試すことができる。
+    // validイベントも発火する
     isValid: function(options) {
       return this._validate({}, _.defaults({validate: true}, options));
     },
