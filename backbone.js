@@ -587,6 +587,7 @@
   // options.collection: .collectionメンバを持つかどうか、.collectionの仕組みはまだ不明
   // options.parse: attributesの内容を加工するための処理を挟ませるかどうか。
   //                具体的には.parse()をOverrideさせてユーザーが定義する必要がある
+  // ちなみにoptionsはそのまま.setのoptionsとして引き渡すことができることも覚えておいたほうが良いです。
   //
   //
   var Model = Backbone.Model = function(attributes, options) {
@@ -598,18 +599,26 @@
     this.cid = _.uniqueId(this.cidPrefix);
     this.attributes = {};
     if (options.collection) this.collection = options.collection;
+
+    // parseオプションが有効な場合はparseを1回挟んでattributesを均す
     if (options.parse) attrs = this.parse(attrs, options) || {};
 
     // .defaults()に定義しているデフォルトで利用するattributesを持ってきて引数で与えられたattrsとマージしている
     // 引数のattributesの方が優先されます。
     attrs = _.defaults({}, attrs, _.result(this, 'defaults'));
+
+    // ここでthis.setを使ってattributesをメンバに反映している
+    // .setを実行しているため、changeイベントがここでも実行されることを覚えておこう
+    // しかし普通、newしている段階ではまだ、イベントの購読が行われていないはずなので体外空振りになるだろう
     this.set(attrs, options);
+
+    // .set内で.changedが汚染されるので浄化している
     this.changed = {};
 
     // initialize()を実行することでユーザーが定義できるコンストラクタ関数を実行する
     // initialize()はnew XXX();の一番最後に評価されることを覚えておこう。
     // 要はnewでも.set();をすでに実行しているため、initializeでは.set()が発生しないほうがイベントの発行回数を減らすことができます。
-    // あと、initializeの戻り値に対しては何も期待していないので、Overrideして何か使っても良いかもしれない。
+    // あと、initializeの戻り値に対しては何も期待していないので、Overrideして何か使っても良いかもしれない。もったいないよね
     // Applicationの試用によってはこの辺重宝すると思うんだけどな
     this.initialize.apply(this, arguments);
   };
@@ -618,9 +627,12 @@
   _.extend(Model.prototype, Events, {
 
     // A hash of attributes whose current and previous value differ.
+    // .setした際のdiffを管理するための領域
+    // こいつを元に最終的にどのattributeのchangeトリガーを実行するかを決定している
     changed: null,
 
     // The value returned during the last failed validation.
+    // 最後にvalidationを実行した際の結果を保持するための領域
     validationError: null,
 
     // The default name for the JSON `id` attribute is `"id"`. MongoDB and
@@ -638,16 +650,18 @@
     // Initialize is an empty function by default. Override it with your own
     // initialization logic.
     // 実はinitializeは標準では何もしていない
+    // ユーザーが任意にOverrideする必要がある
     initialize: function(){},
 
     // Return a copy of the model's `attributes` object.
-    // 実はtoJSONはattributesをcloneしているだけ
+    // attributesをcloneしているだけなのでtoJSONした結果を書き換えてもModelのattributesには影響が出ない
     toJSON: function(options) {
       return _.clone(this.attributes);
     },
 
     // Proxy `Backbone.sync` by default -- but override this if you need
     // custom syncing semantics for *this* particular model.
+    // Backbone.syncをModelのコンテキストで実行するためのショートカット
     sync: function() {
       return Backbone.sync.apply(this, arguments);
     },
@@ -661,6 +675,7 @@
 
     // Get the HTML-escaped value of an attribute.
     // escapeは.getした内容をエスケープさせる
+    // Backbone.jsのソースコード上ではModel.escapeを呼んでいるところは存在しない
     escape: function(attr) {
       return _.escape(this.get(attr));
     },
@@ -681,10 +696,11 @@
     // Set a hash of model attributes on the object, firing `"change"`. This is
     // the core primitive operation of a model, updating the data and notifying
     // anyone who needs to know about the change in state. The heart of the beast.
-    // optionsの引数には、unset, silentの2つのパラメタが有る
+    // optionsの引数には、unset, silent, validateの3つのパラメタが有る
     // unset -> 指定したkeyを削除したい場合に利用する
     // silent -> attributes変更時のchangeイベントを発行しないようにする
     // validate -> validationを実行させるかどうか。setのときはデフォルトではvalidationは実行されない
+    // 引数のパターンは(key, val, options), (key-value-Object, options)の2つのパターンをサポートしている
     set: function(key, val, options) {
       if (key == null) return this;
 
@@ -705,7 +721,7 @@
       options || (options = {});
 
       // Run validation.
-      // validationによってコケた場合はthisではなく、falseがかえるので注意
+      // validationによってコケた場合はthisではなく、falseがかえるので注意, 他ではすべてthisが帰ってくるのにね・・・・
       // しかし、ここで疑問なのが、validationでコケた場合はinvalidイベントが発行されるのでわざわざfalseを返す意味はあるのか
       // Validationの仕組みを利用したい場合は.validate()をOverrideすること
       // 間違っても._validate()をOverrideしてはいけない。やってしまうと、validイベントが飛ばなくなる
@@ -714,7 +730,6 @@
       if (!this._validate(attrs, options)) return false;
 
       // Extract attributes and options.
-      // オプションの引数には、unset, silentの2つのパラメタが有る
       // unset -> 指定したkeyを削除したい場合に利用する
       // silent -> attributes変更時のchangeイベントを発行しないようにする
       var unset      = options.unset;
@@ -788,6 +803,8 @@
       }
       this._pending = false;
       this._changing = false;
+
+      // thisを返すのでメソッドチェーンできます
       return this;
     },
 
@@ -795,6 +812,7 @@
     // if the attribute doesn't exist.
     // unsetは特定のメンバを削除する
     unset: function(attr, options) {
+      // keyさえ指定してしまえばよく、valueの値はどうでもいいのでundefinedを送るようにしている
       return this.set(attr, void 0, _.extend({}, options, {unset: true}));
     },
 
@@ -803,6 +821,7 @@
     // .cidは使いまわされる
     clear: function(options) {
       var attrs = {};
+      // すべてのattributesのkeyを事前にひっぱてきておいて、1回の.setで済むようにしている
       for (var key in this.attributes) attrs[key] = void 0;
       return this.set(attrs, _.extend({}, options, {unset: true}));
     },
@@ -821,7 +840,8 @@
     // persisted to the server. Unset attributes will be set to undefined.
     // You can also pass an attributes object to diff against the model,
     // determining if there *would be* a change.
-    // ちょっと後で確認する
+    // 渡されたattributeと自身のメンバのattributeの差分を返す
+    // 差分がない場合はfalseが帰ってくるので注意
     changedAttributes: function(diff) {
       if (!diff) return this.hasChanged() ? _.clone(this.changed) : false;
       var old = this._changing ? this._previousAttributes : this.attributes;
@@ -980,12 +1000,15 @@
 
     // Create a new model with identical attributes to this one.
     // Model.cloneを行うことによってコンストラクタを呼ぶことができるので
-    // idの採番が行われる
+    // idの採番が行いクローンを作成するので
+    // 違うObjectとなる
     clone: function() {
       return new this.constructor(this.attributes);
     },
 
     // A model is new if it has never been saved to the server, and lacks an id.
+    // サーバーで保存されたものかどうかを評価する
+    // サーバー側から取得したModelにはidがくっついている、という前提で評価する
     isNew: function() {
       return !this.has(this.idAttribute);
     },
@@ -1005,7 +1028,6 @@
       if (!options.validate || !this.validate) return true;
       attrs = _.extend({}, this.attributes, attrs);
       var error = this.validationError = this.validate(attrs, options) || null;
-      console.log(error);
       if (!error) return true;
       this.trigger('invalid', this, error, _.extend(options, {validationError: error}));
       return false;

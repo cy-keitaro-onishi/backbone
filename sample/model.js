@@ -20,6 +20,8 @@ a.set({
   hoge: 'Hoge',
 });
 a.set({
+});
+a.set({
   hoge: 'HOGE',
 });
 a.set({
@@ -82,6 +84,9 @@ console.log('-------------------------------');
 // .fetchを利用する際なんかに重宝する
 var Smoker = Backbone.Model.extend({
   defaults: {age: 0},
+  validate: function(attrs){
+    return attrs.age >= 20 ? null: new Error('age');
+  },
   parse: function(response){
     return response.user;
   }
@@ -93,4 +98,77 @@ var e = new Smoker({
 }, {parse: true});
 console.log('-------------------------------');
 console.log(e.toJSON());
+console.log('-------------------------------');
+
+
+
+///////////////////////////////////////////////////
+// .setの復讐。
+// コンソールには何と出力されるでしょうか
+//
+var f = new Smoker({
+  age: 20,
+});
+
+f.on('invalid',    function(){ console.log('a'); });
+f.on('change',     function(){ console.log('b'); });
+f.on('change:age', function(){ console.log('c'); });
+f.on('change:xxx', function(){ console.log('d'); });
+
+console.log('-------------------------------');
+f.set('age', 10);
+f.set('age', 10);
+f.set('age', 20);
+f.set('age', 20);
+f.set('yyy', 20);
+console.log('-------------------------------');
+
+var g = new Smoker({
+  age: 20,
+});
+
+g.on('invalid',    function(){ console.log('a'); });
+g.on('change',     function(){ console.log('b'); });
+g.on('change:age', function(){ console.log('c'); });
+g.on('change:xxx', function(){ console.log('d'); });
+
+console.log('-------------------------------');
+g.set({
+  age: 10,
+  xxx: 10
+});
+g.set({
+  age: 10,
+  xxx: 10
+});
+console.log('-------------------------------');
+
+var h = new Smoker({
+  age: 20,
+});
+
+h.on('invalid',    function(){ console.log('a'); });
+h.on('change',     function(){ console.log('b'); });
+h.on('change:age', function(){ console.log('c'); });
+h.on('change:xxx', function(){ console.log('d'); });
+
+console.log('-------------------------------');
+h.set('age', 10, {validate: true});
+h.set('age', 10, {silent: true});
+h.set('age', 20, {validate: true});
+h.set('age', 30, {validate: true, silent: true});
+console.log('-------------------------------');
+
+var i = new Smoker({
+  age: 20,
+});
+
+i.on('invalid',    function(){ console.log('a'); });
+i.on('change',     function(){ console.log('b'); });
+i.on('change:age', function(){ console.log('c'); });
+i.on('change:xxx', function(){ console.log('d'); });
+
+console.log('-------------------------------');
+i.set('age', 30, {silent: true});
+i.set('age', void 0, {unset: true});
 console.log('-------------------------------');
