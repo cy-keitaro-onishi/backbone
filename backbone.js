@@ -625,10 +625,14 @@
 
     // The default name for the JSON `id` attribute is `"id"`. MongoDB and
     // CouchDB users may want to set this to `"_id"`.
+    // モデルを一意に識別するための識別子
+    // よくあるのがサーバー側の実装に依存してidなどになる
     idAttribute: 'id',
 
     // The prefix is used to create the client id which is used to identify models locally.
     // You may want to override this if you're experiencing name clashes with model ids.
+    // Backbone側がModelのインスタンス1つづに一意なIDを付与する際にプレフィックスとして扱う文字列
+    //
     cidPrefix: 'c',
 
     // Initialize is an empty function by default. Override it with your own
@@ -680,6 +684,7 @@
     // optionsの引数には、unset, silentの2つのパラメタが有る
     // unset -> 指定したkeyを削除したい場合に利用する
     // silent -> attributes変更時のchangeイベントを発行しないようにする
+    // validate -> validationを実行させるかどうか。setのときはデフォルトではvalidationは実行されない
     set: function(key, val, options) {
       if (key == null) return this;
 
@@ -704,6 +709,8 @@
       // しかし、ここで疑問なのが、validationでコケた場合はinvalidイベントが発行されるのでわざわざfalseを返す意味はあるのか
       // Validationの仕組みを利用したい場合は.validate()をOverrideすること
       // 間違っても._validate()をOverrideしてはいけない。やってしまうと、validイベントが飛ばなくなる
+      // optionsをvalidate:trueにして引数を渡さないとvalidateは実行されない
+      // ちなみにコンストラクタでも.setは呼ばれるがoptionsは入っていないのでvalidateは呼ばれない
       if (!this._validate(attrs, options)) return false;
 
       // Extract attributes and options.
@@ -712,6 +719,9 @@
       // silent -> attributes変更時のchangeイベントを発行しないようにする
       var unset      = options.unset;
       var silent     = options.silent;
+
+      // 変更したattributeのkeyを記録させていき
+      // 最終的にchange::イベントを発火させる際の名前に利用するためのもの
       var changes    = [];
 
       // 一旦_changingをtrueにしてModelを更新中のステータスに切り替える
@@ -719,24 +729,33 @@
       var changing   = this._changing;
       this._changing = true;
 
+      // 更新中から更新中に変わった際は、attributesを書き換える前に変更前の状態を覚えておく
       if (!changing) {
         this._previousAttributes = _.clone(this.attributes);
         this.changed = {};
       }
 
+      // 変更中のModelのattributesの状態
       var current = this.attributes;
+      // .set実行時に更新したkey/valueの情報
       var changed = this.changed;
+      // .setする前のModelのattributesの状態
       var prev    = this._previousAttributes;
 
       // For each `set` attribute, update or delete the current value.
       for (var attr in attrs) {
         val = attrs[attr];
+
+        // 現在のvalueと書き換えるvalueが同じ場合はchangesに記録されないのでchange::keyイベントは発行されなくなる
         if (!_.isEqual(current[attr], val)) changes.push(attr);
         if (!_.isEqual(prev[attr], val)) {
           changed[attr] = val;
         } else {
           delete changed[attr];
         }
+
+        // 実際のattributesの書き換えを行っているのはここ
+        // currentはthis.attributesの参照
         unset ? delete current[attr] : current[attr] = val;
       }
 
@@ -744,10 +763,11 @@
       if (this.idAttribute in attrs) this.id = this.get(this.idAttribute);
 
       // Trigger all relevant attribute changes.
+      // 更新したすべてのkeyにて、change::key名のイベントを発行している
       if (!silent) {
         if (changes.length) this._pending = options;
         for (var i = 0; i < changes.length; i++) {
-          // 更新したメンバの数changeイベントを発火させている
+          // current[changes[i]]は変更後のvalueが入ってくる
           this.trigger('change:' + changes[i], this, current[changes[i]], options);
         }
       }
@@ -758,6 +778,7 @@
 
       // silent: trueをしていない場合はchangeイベントは発火させない
       // また、pending状態でない場合もchangeイベントは発火しない
+      // changesが[]のまま場合、(setした内容がかすりもしなかった場合もここはおそらく評価されない)
       if (!silent) {
         while (this._pending) {
           options = this._pending;
@@ -951,6 +972,8 @@
     // parseはModelがnewされるとき渡されるatttibutesを加工する仕組みをユーザー自身が都合のいい形に変換するものであり
     // ユーザーによってOverrideされることを期待している
     // sync関係のAPIを利用してModelの生成を行う場合に重宝される
+    // .setの際はparseは評価されない。
+    // コンストラクタの際は明示的にoptionsでparse:trueを指定すれば評価してくれる
     parse: function(resp, options) {
       return resp;
     },
@@ -982,6 +1005,7 @@
       if (!options.validate || !this.validate) return true;
       attrs = _.extend({}, this.attributes, attrs);
       var error = this.validationError = this.validate(attrs, options) || null;
+      console.log(error);
       if (!error) return true;
       this.trigger('invalid', this, error, _.extend(options, {validationError: error}));
       return false;
