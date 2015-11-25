@@ -1520,6 +1520,7 @@
   };
 
   // Cached regex to split keys for `delegate`.
+  // イベントのkeyを
   var delegateEventSplitter = /^(\S+)\s*(.*)$/;
 
   // List of view options to be set as properties.
@@ -1555,25 +1556,38 @@
 
     // jQuery delegate for element lookup, scoped to DOM elements within the
     // current view. This should be preferred to global lookups where possible.
+    // View自身がもつDOM要素に対してのjQuery.fn.findのショートカット
     $: function(selector) {
       return this.$el.find(selector);
     },
 
     // Initialize is an empty function by default. Override it with your own
     // initialization logic.
+    // ユーザーが定義する初期化処理を実装するところ
+    // Modelの時と同じようなのり
     initialize: function(){},
 
     // **render** is the core function that your view should override, in order
     // to populate its element (`this.el`), with the appropriate HTML. The
     // convention is for **render** to always return `this`.
+    // DOMの要素を画面に出力するための実装を行うところ
+    // 生のBackboneだとrenderの内容を常にユーザーが定義する必要がある
+    // return this;をすることが一般的なようだ
     render: function() {
       return this;
     },
 
     // Remove this view by taking the element out of the DOM, and removing any
     // applicable Backbone.Events listeners.
+    // DOMからViewを削除するための処理
     remove: function() {
+      
+      // DOMからViewのHTML要素を削除する
+      // 具体的にはjQueryのAPIが実行されるだけである 
       this._removeElement();
+      
+      // Viewが購読しているイベントを全て破棄する。
+      // .stopListeningはBackbone.Eventsで実装されているものであり、Backbone.ViewはBackbone.Eventsを継承している
       this.stopListening();
       return this;
     },
@@ -1581,6 +1595,7 @@
     // Remove this view's element from the document and all event listeners
     // attached to it. Exposed for subclasses using an alternative DOM
     // manipulation API.
+    // DOMからViewのHTML要素を削除する
     _removeElement: function() {
       this.$el.remove();
     },
@@ -1677,7 +1692,7 @@
     // Clears all callbacks previously bound to the view by `delegateEvents`.
     // You usually don't need to use this, but may wish to if you have multiple
     // Backbone views attached to the same DOM element.
-    // Viewに紐付けられたjQueryのイベントをイベントを取っ払う
+    // Viewに紐付けられたjQueryのイベントをすべて取っ払う
     undelegateEvents: function() {
       if (this.$el) this.$el.off('.delegateEvents' + this.cid);
       return this;
@@ -1685,6 +1700,7 @@
 
     // A finer-grained `undelegateEvents` for removing a single delegated event.
     // `selector` and `listener` are both optional.
+    // 指定された、Viewに紐付けられたjQueryのイベントを取っ払う
     undelegate: function(eventName, selector, listener) {
       this.$el.off(eventName + '.delegateEvents' + this.cid, selector, listener);
       return this;
@@ -1692,6 +1708,8 @@
 
     // Produces a DOM element to be assigned to your view. Exposed for
     // subclasses using an alternative DOM manipulation API.
+    // タグ名をもとにHTMLタグの文字列を生成する。
+    // window.documentのAPIをそのまま使っているだけである
     _createElement: function(tagName) {
       return document.createElement(tagName);
     },
@@ -1725,6 +1743,8 @@
 
     // Set attributes from a hash on this view's element.  Exposed for
     // subclasses using an alternative DOM manipulation API.
+    // View自身のDOM要素にattributesを設定する
+    // jQueryのAPIをそのまま使っているだけである。
     _setAttributes: function(attributes) {
       this.$el.attr(attributes);
     }
