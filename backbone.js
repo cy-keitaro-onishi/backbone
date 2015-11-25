@@ -1500,10 +1500,22 @@
 
   // Creating a Backbone.View creates its initial element outside of the DOM,
   // if an existing element is not provided...
+  // Viewのコンストラクタ
+  // 引数にoptionsを渡すことでクラス側で定義しているメソッドやプロパティをOverrideすることができる
+  // ただし、OverrideできるものはviewOptionsに定義されているkey名のものに限っている
+  // コンストラクタは関数は触らないで、newの振る舞いを変えるにはModelと同じく、initializeをオーバーライドさせる
   var View = Backbone.View = function(options) {
+    
+    // view1, view2みたいな感じになるようにインスタンスに対して一意なコードを割り振っている
     this.cid = _.uniqueId('view');
+    
+    // 特定のkeyのもののみ、オーバーライドされることを許可している
     _.extend(this, _.pick(options, viewOptions));
+    
     this._ensureElement();
+    
+    // Modelと同じくinitializeを最後に実行している
+    // Modelと同じくプレーンな状態ではinitializeは何も評価しないし、何も返さないのでユーザーが定義する
     this.initialize.apply(this, arguments);
   };
 
@@ -1511,12 +1523,34 @@
   var delegateEventSplitter = /^(\S+)\s*(.*)$/;
 
   // List of view options to be set as properties.
-  var viewOptions = ['model', 'collection', 'el', 'id', 'attributes', 'className', 'tagName', 'events'];
+  var viewOptions = [
+    // Viewで利用するModel
+    'model',
+    // Viewで利用するCollection
+    'collection',
+    // View自身のDOM要素のテキスト
+    'el',
+    // View自身のDOM要素のrootのDOMに付与するID
+    // ※ elの方が優先して使われる
+    'id',
+    // View自身のDOM要素のrootのDOMに付与するプロパティ
+    // ※ elの方が優先して使われる
+    'attributes',
+    // View自身のDOM要素のrootのDOMに付与するクラス名
+    // ※ elの方が優先して使われる
+    'className',
+    // View自身のDOM要素のrootのDOMに付与するタグ名
+    // ※ elの方が優先して使われる
+    'tagName',
+    // Viewのイベントのkey/value
+    'events'
+  ];
 
   // Set up all inheritable **Backbone.View** properties and methods.
   _.extend(View.prototype, Events, {
 
     // The default `tagName` of a View's element is `"div"`.
+    // デフォルトでは『<div></div>』をViewのDOM要素して扱うことになる。
     tagName: 'div',
 
     // jQuery delegate for element lookup, scoped to DOM elements within the
@@ -1553,9 +1587,15 @@
 
     // Change the view's element (`this.el` property) and re-delegate the
     // view's events on the new element.
+    // Viewの要素を変更し、イベント周りを均す
     setElement: function(element) {
+      // Viewのイベントを一旦剥がす
       this.undelegateEvents();
+      
+      // this.elの書き換えを行う
       this._setElement(element);
+      
+      // Viewのイベントを付け直す
       this.delegateEvents();
       return this;
     },
@@ -1565,6 +1605,10 @@
     // context or an element. Subclasses can override this to utilize an
     // alternative DOM manipulation API and are only required to set the
     // `this.el` property.
+    // this.elの要素の書き換えを行う
+    // this.el: Viewの要素のテキストデータ
+    // this.$el: Viewの要素のjQueryオブジェクト
+    // 単純に$elは$(el)のショートカットみたいな扱いになります。
     _setElement: function(el) {
       this.$el = el instanceof Backbone.$ ? el : Backbone.$(el);
       this.el = this.$el[0];
@@ -1583,15 +1627,36 @@
     // pairs. Callbacks will be bound to the view, with `this` set properly.
     // Uses event delegation for efficiency.
     // Omitting the selector binds the event to `this.el`.
+    // this.eventsに記載されているイベントの内容をViewに登録させるための処理
+    // this.eventsはkey/valueのオブジェクトでもいいし、key/valueのオブジェクトを返すような関数でもOK
     delegateEvents: function(events) {
+      
+      // 定義されているeventsを持ってくる
       events || (events = _.result(this, 'events'));
       if (!events) return this;
+      
+      // イベントの登録前に一旦イベントを外して均す
       this.undelegateEvents();
+      
       for (var key in events) {
+        // イベントのcallback関数はViewのコンテキスト上に存在する関数名を指定するのもOKだけど、関数そのものを指定することもできる
+        // {a: 'alistener', b: function(){...}} が混ざってもいいということ
         var method = events[key];
         if (!_.isFunction(method)) method = this[method];
         if (!method) continue;
+        
+        // イベントのkeyを分割する
+        // ex) 'click hoge' => [click, click, hoge]みたいな
         var match = key.match(delegateEventSplitter);
+        
+        // _.bindにてcallback関数のcontextをViewのcontextに書き換えた関数として生成しなおしている。
+        // _.bindのがどういうものかは以下を見るのが早いかと
+        // ----------------------------------------------------------------------------------------------------
+        // var func = function(greeting){ return greeting + ': ' + this.name };
+        // func = _.bind(func, {name: 'moe'}, 'hi');
+        // func();
+        // => 'hi: moe'
+        // ----------------------------------------------------------------------------------------------------
         this.delegate(match[1], match[2], _.bind(method, this));
       }
       return this;
@@ -1600,6 +1665,10 @@
     // Add a single event listener to the view's element (or a child element
     // using `selector`). This only works for delegate-able events: not `focus`,
     // `blur`, and not `change`, `submit`, and `reset` in Internet Explorer.
+    // イベントの登録を行う処理
+    // ViewのイベントはすべてjQueryのAPIを使って実装されている
+    // イベントの登録を行う際にコンストラクタでインスタンスに対して一意なIDを採番していたが、これがここに来て意味を出した。
+    // これにより、同じViewだが、インスタンスの違う場合、別のイベントとして対応することができる
     delegate: function(eventName, selector, listener) {
       this.$el.on(eventName + '.delegateEvents' + this.cid, selector, listener);
       return this;
@@ -1608,6 +1677,7 @@
     // Clears all callbacks previously bound to the view by `delegateEvents`.
     // You usually don't need to use this, but may wish to if you have multiple
     // Backbone views attached to the same DOM element.
+    // Viewに紐付けられたjQueryのイベントをイベントを取っ払う
     undelegateEvents: function() {
       if (this.$el) this.$el.off('.delegateEvents' + this.cid);
       return this;
@@ -1630,14 +1700,25 @@
     // If `this.el` is a string, pass it through `$()`, take the first
     // matching element, and re-assign it to `el`. Otherwise, create
     // an element from the `id`, `className` and `tagName` properties.
+    // 
+    // this.elが定義されていた場合は、this.elを評価し、結果の文字列をView自身のDOM要素として扱うようになる。
+    // this.elは文字列として定義されていてもいいし、関数として定義されていてもいい。.result便利だなぁ
+    // this.elが存在しない場合はthis.attributes, this.id, this.className, this.tagNameに定義されているものを利用してView自身のDOM要素として扱うことになる
+    // この中でthis.tagNameに関してはデフォルトで『div』が定義されているので、仮に何にも定義されていない状態だと、『<div></div>』がViewのDOMになる
+    // ※ Model.attributesとView.attributesは全く世界が違うので注意すること。View.attributesはDOM要素のattributesのことを指している。『href, srcとかのあれね。』
     _ensureElement: function() {
-      if (!this.el) {
+      if (!this.el)
+      {
+        // this.elが定義されていない場合は、Viewのメンバ変数を利用してDOMを生成する
         var attrs = _.extend({}, _.result(this, 'attributes'));
         if (this.id) attrs.id = _.result(this, 'id');
         if (this.className) attrs['class'] = _.result(this, 'className');
         this.setElement(this._createElement(_.result(this, 'tagName')));
         this._setAttributes(attrs);
-      } else {
+      }
+      else
+      {
+        // this.elを定義しているときはそれを単純に利用するだけ
         this.setElement(_.result(this, 'el'));
       }
     },
