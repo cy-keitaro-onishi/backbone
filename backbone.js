@@ -1511,7 +1511,8 @@
     
     // 特定のkeyのもののみ、オーバーライドされることを許可している
     _.extend(this, _.pick(options, viewOptions));
-    
+
+    // DOM周りのセットアップやイベントの登録などを行う    
     this._ensureElement();
     
     // Modelと同じくinitializeを最後に実行している
@@ -1520,10 +1521,10 @@
   };
 
   // Cached regex to split keys for `delegate`.
-  // イベントのkeyを
+  // イベントのkeyをイベント名とセレクタ名で分割するための正規表現オブジェクト
   var delegateEventSplitter = /^(\S+)\s*(.*)$/;
 
-  // List of view options to be set as properties.
+  // コンストラクタの引数でOverrideが可能なオブジェクトのkey名
   var viewOptions = [
     // Viewで利用するModel
     'model',
@@ -1551,7 +1552,7 @@
   _.extend(View.prototype, Events, {
 
     // The default `tagName` of a View's element is `"div"`.
-    // デフォルトでは『<div></div>』をViewのDOM要素して扱うことになる。
+    // デフォルトでは『<div>』をViewのDOM要素して扱うことになる。
     tagName: 'div',
 
     // jQuery delegate for element lookup, scoped to DOM elements within the
@@ -1587,6 +1588,7 @@
       this._removeElement();
       
       // Viewが購読しているイベントを全て破棄する。
+      // stopListeningをせずに、view = null;などをしてViewのクラスを消してしまうと、イベント発行元に購読者としてのViewのインスタンスが残ってしまうので注意すること。ようはイベントをその後も拾い続けてしまう。
       // .stopListeningはBackbone.Eventsで実装されているものであり、Backbone.ViewはBackbone.Eventsを継承している
       this.stopListening();
       return this;
@@ -1666,6 +1668,8 @@
         
         // _.bindにてcallback関数のcontextをViewのcontextに書き換えた関数として生成しなおしている。
         // _.bindのがどういうものかは以下を見るのが早いかと
+        // なのでeventsに設定できるcallbackは必ずViewになる
+        // eventsのcallbackを別のcontextで実行する方法は見つからない。
         // ----------------------------------------------------------------------------------------------------
         // var func = function(greeting){ return greeting + ': ' + this.name };
         // func = _.bind(func, {name: 'moe'}, 'hi');
@@ -1685,6 +1689,13 @@
     // イベントの登録を行う際にコンストラクタでインスタンスに対して一意なIDを採番していたが、これがここに来て意味を出した。
     // これにより、同じViewだが、インスタンスの違う場合、別のイベントとして対応することができる
     delegate: function(eventName, selector, listener) {
+
+      // 実際にイベントを登録するときは『click.delegateEventsview1』みたいな感じになる。
+      // ここでいう『delegateEventsview1』の部分はこのイベントのネームスペースとして扱えるようになり。
+      //ネームスペースを利用したイベントの削除なんかができるようになるらしい。
+      // https://api.jquery.com/on/
+      // この記事にも書かれているが気持ち悪い挙動なので注意。
+      // http://qiita.com/sasaplus1/items/0ec036c1a8789b9d9907
       this.$el.on(eventName + '.delegateEvents' + this.cid, selector, listener);
       return this;
     },
@@ -1722,7 +1733,7 @@
     // this.elが定義されていた場合は、this.elを評価し、結果の文字列をView自身のDOM要素として扱うようになる。
     // this.elは文字列として定義されていてもいいし、関数として定義されていてもいい。.result便利だなぁ
     // this.elが存在しない場合はthis.attributes, this.id, this.className, this.tagNameに定義されているものを利用してView自身のDOM要素として扱うことになる
-    // この中でthis.tagNameに関してはデフォルトで『div』が定義されているので、仮に何にも定義されていない状態だと、『<div></div>』がViewのDOMになる
+    // この中でthis.tagNameに関してはデフォルトで『div』が定義されているので、仮に何にも定義されていない状態だと、『<div>』がViewのDOMになる
     // ※ Model.attributesとView.attributesは全く世界が違うので注意すること。View.attributesはDOM要素のattributesのことを指している。『href, srcとかのあれね。』
     _ensureElement: function() {
       if (!this.el)
@@ -1750,6 +1761,7 @@
     }
 
   });
+  
 
   // Backbone.sync
   // -------------

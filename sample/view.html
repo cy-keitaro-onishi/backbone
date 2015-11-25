@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf8'>
+  <title>Backbone Sample</title>
+</head>
+<body>
+  <div id="sample1"></div>
+  <div id="sample2"></div>
+  <div id="sample3"></div>
+  <div id="sample4"></div>
+
+
+
+<script src="vendor/jquery.js"></script>
+<script src="vendor/underscore.js"></script>
+<script src="../backbone.js"></script>
+<script>
+
+//////////////////////////////////////////////////////////
+// render!は何回出力されるでしょうか
+//////////////////////////////////////////////////////////
+var Sample1 = Backbone.View.extend({
+  template: '<p class="hoge">Hello</p>',
+  el: '#sample1',
+  events: {
+    'click .hoge': 'onClick',
+  },
+  initialize: function() {
+    this.listenTo(this.model, 'change', this.render);
+  },
+  render: function() {
+    console.log('render!');
+    this.$el.html(this.template);
+    return this;
+  },
+  onClick: function()
+  {
+    console.log('click!');
+  }
+});
+
+console.log('----------------------------------------------')
+var sample1Model = new Backbone.Model({});
+new Sample1({model: sample1Model});
+sample1Model.set('hoge', 'Hoge');
+sample1Model.set('hoge', 'Hoge');
+sample1Model.set('hoge', 'Fuga', {silent: true});
+console.log('----------------------------------------------')
+
+
+
+
+
+
+//////////////////////////////////////////////////////////
+// Fugaをclickすると何が出力されるでしょうか
+//////////////////////////////////////////////////////////
+var Hoge = Backbone.Model.extend({
+  name: 'hoge',
+  fuga: function()
+  {
+    console.log(this.name);
+  }
+});
+var hoge = new Hoge();
+var Sample2 = Backbone.View.extend({
+  name: 'fuga',
+  template: '<p class="fuga">Fuga</p>',
+  el: '#sample2',
+  events: {
+    'click .fuga': hoge.fuga,
+  },
+  render: function() {
+    this.$el.html(this.template);
+    return this;
+  },
+});
+
+console.log('----------------------------------------------')
+new Sample2({model: sample1Model}).render();
+console.log('----------------------------------------------')
+
+
+
+//////////////////////////////////////////////////////////
+// 以下のコードを実行すると『alert!』が1秒ごとに出力されます。
+// 出力をとめつつ、ブラウザのDOMツリーからViewの要素を消し去りたいときはどうすればいいでしょうか
+//////////////////////////////////////////////////////////
+var Timer = Backbone.Model.extend({
+  initialize: function()
+  {
+    var self = this;
+    setInterval(function(){
+      self.trigger('alert');
+    }, 1000);
+  }
+});
+var timer = new Timer();
+var Sample3 = Backbone.View.extend({
+  template: '<p>Piyo</p>',
+  el: '#sample3',
+  initialize: function()
+  {
+    this.listenTo(timer, 'alert', function(){
+      console.log('alert!');
+    })
+  },
+  render: function() {
+    this.$el.html(this.template);
+    return this;
+  },
+});
+
+console.log('----------------------------------------------')
+var view = new Sample3().render();
+
+// それぞれ、A,B,C,Dがどのような振る舞いになるかをお応えください。
+// イベントはとまるか止まらないか・DOMツリーから要素は消えるかどうか
+// A: view.$el.remove();
+// B: view.remove();
+// C: view = null;
+// D: $(view.el).remove();
+
+// timerのイベント登録状況はこれで詳しく確認できる
+console.log(timer._events);
+console.log('----------------------------------------------')
+
+</script>
+</html>
