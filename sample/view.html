@@ -18,6 +18,27 @@
 <script>
 
 //////////////////////////////////////////////////////////
+// el/templateを使わないViewの作り方
+//////////////////////////////////////////////////////////
+var Sample0 = Backbone.View.extend({
+  tagName: 'a',
+  id: 'sample0',
+  className: function(){ return 'sample0-cls'; },
+  attributes: {
+    href: 'http://google.com',
+  },
+  initialize: function()
+  {
+    this.$el.text('Google');
+  }
+});
+
+var sample0 = new Sample0();
+$('body').append(sample0.el);
+
+
+
+//////////////////////////////////////////////////////////
 // render!は何回出力されるでしょうか
 //////////////////////////////////////////////////////////
 var Sample1 = Backbone.View.extend({
@@ -125,6 +146,7 @@ var view = new Sample3().render();
 // timerのイベント登録状況はこれで詳しく確認できる
 console.log(timer._events);
 console.log('----------------------------------------------')
+
 
 </script>
 </html>
