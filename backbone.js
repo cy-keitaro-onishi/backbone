@@ -1530,7 +1530,9 @@
     'model',
     // Viewで利用するCollection
     'collection',
-    // View自身のDOM要素のテキスト
+    // View自身のDOM要素のセレクタを定義する
+    // コンストラクタ内でDOMのオブジェクトに変換される
+    // DOMをセレクタを用いて取得しなくてもよく、id, classNameなどを利用して動的にDOMを構築することもできる
     'el',
     // View自身のDOM要素のrootのDOMに付与するID
     // ※ elの方が優先して使われる
