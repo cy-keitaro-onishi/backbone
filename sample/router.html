@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf8'>
+  <title>Backbone Sample</title>
+</head>
+<body>
+  <div id="sample1"></div>
+  <div id="sample2"></div>
+  <div id="sample3"></div>
+  <div id="sample4"></div>
+<script src="vendor/jquery.js"></script>
+<script src="vendor/underscore.js"></script>
+<script src="../backbone.js"></script>
+<script>
+
+// var Router = Backbone.Router.extend({
+//   routes : {
+//     ''           : 'index',
+//     'mypage'     : 'mypage',
+//     'blog(/:id)' : 'blog',
+//     'func' : function(){
+//     }
+//   },
+//   index: function()
+//   {
+//     console.log('index');
+//   },
+//   mypage: function()
+//   {
+//     console.log('index');
+//   },
+//   blog: function(id)
+//   {
+//     console.log('blog');
+//     // console.log(arg1);
+//   },
+// });
+// 
+// var router = new Router();
+// router.on('route', function(){
+//   console.log('route');
+// });
+// router.on('route:mypage', function () {
+//   console.log('mypage', arguments);
+// });
+// router.on('route:blog', function () {
+//   console.log('blog', arguments);
+// });
+// 
+// $(function () {
+//   Backbone.history.start();
+// });
+// console.log('----------------------------');
+
+
+
+
+
+
+
+
+
+
+// // 確認問題
+// // #mypageに遷移すると、なんと出力されるでしょうか
+// // 出力される順番を知りたいです。
+// var Router = Backbone.Router.extend({
+//   routes : {
+//     'mypage': 'mypage',
+//   },
+//   mypage: function()
+//   {
+//     console.log('A');
+//   },
+// });
+// 
+// var router = new Router();
+// router.on('route', function(){
+//   console.log('B');
+// });
+// router.on('route:mypage', function () {
+//   console.log('C');
+// });
+// Backbone.history.on('route', function () {
+//   console.log('D');
+// });
+// $(function () {
+//   Backbone.history.start();
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 確認問題
+// 以下のコードを実行するとhelloは何回出力されますか
+// コードを実行する際は#mypageではなくrootにいます
+// var Router = Backbone.Router.extend({
+//   routes : {
+//     mypage: function(){
+//       console.log('hello');
+//     },
+//   },
+// });
+// var router = new Router();
+// router.on('route:mypage', function () {
+//   console.log('C');
+// });
+//
+// $(function () {
+//   Backbone.history.start();
+//   Backbone.history.navigate('mypage');
+//   Backbone.history.navigate('mypage');
+//   Backbone.history.navigate('mypage');
+//   Backbone.history.navigate('mypage');
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // 確認問題
+// // 以下のコードを実行するとhelloは何回出力されますか
+// // コードを実行する際は#mypageではなくrootにいます
+// var Router = Backbone.Router.extend({
+//   routes : {
+//     mypage: function(){
+//       console.log('hello');
+//     },
+//   },
+// });
+// var router = new Router();
+// router.on('route:mypage', function () {
+//   console.log('C');
+// });
+// 
+// $(function () {
+//   Backbone.history.start();
+//   Backbone.history.navigate('mypage', true);
+//   Backbone.history.navigate('mypage', true);
+//   Backbone.history.navigate('mypage', true);
+//   Backbone.history.navigate('mypage', true);
+// });
+
+
+</script>
+</html>

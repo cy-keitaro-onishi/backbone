@@ -1863,15 +1863,28 @@
 
   // Routers map faux-URLs to actions, and fire events when routes are
   // matched. Creating a new one sets its `routes` hash, if not set statically.
+  //
+  // ここからRouter
+  // RouterはMVCでいうところのControllerと思って良い, Marionette.jsではRouter, Controllerで役割を分けることができるがBackbone.jsでは両方の役割を持つことになる
+  // 引数optionsには.Router.routesを上書きするための情報を入力することができる
+  // ModelやViewと同じく、ユーザーがー定義している.initializeを最後に評価する
   var Router = Backbone.Router = function(options) {
+    
+    // optionsがあれが.routesにて
     options || (options = {});
     if (options.routes) this.routes = options.routes;
+    
+    
+    // ルーティング情報の登録を行う
     this._bindRoutes();
+    
+    // ユーザー定義の初期化処理の実行
     this.initialize.apply(this, arguments);
   };
 
   // Cached regular expressions for matching named param parts and splatted
   // parts of route strings.
+  // 文字列を正規表現オブジェクト変換する際に使う
   var optionalParam = /\((.*?)\)/g;
   var namedParam    = /(\(\?)?:\w+/g;
   var splatParam    = /\*\w+/g;
@@ -1890,17 +1903,51 @@
     //       ...
     //     });
     //
+    // ルーティング情報の登録を行う
+    // 引数の順番をずらす仕組みが入っているので少し見づらい
     route: function(route, name, callback) {
+      
+      // routeが正規表現のオブジェクトじゃないは場合に正規表現のオブジェクトに変換する
       if (!_.isRegExp(route)) route = this._routeToRegExp(route);
+
+      // 2つめの文字列にはcallback用の関数が入ってくることがあるので
+      // その場合は引数の役割をずらす 
       if (_.isFunction(name)) {
         callback = name;
         name = '';
       }
+      // ここでやっと変数callbackに関数が入ることを約束できる
       if (!callback) callback = this[name];
+      
+      // 一旦整理すると
+      // route: ルーティング情報のkey名となる正規表現オブジェクト
+      // name: ルーティング実行時のcallback関数のメソッド名(Router.xxx)と読める場合にのみ利用、callbackが無名関数の場合は特に役割がない
+      // callback: ルーティング実行時のcallback関数
+      
+      
+      // この記述に関してはvar self = this;と同じ意味合いで使っている
+      // ↓のhistory.routeにて無名関数と登録するがその関数のcontextがRouterとは異なるからこうなっている
       var router = this;
+      
+      // ルーティングの関する情報はBackbone.historyに登録する
+      // Backbone.history.routeに関しては単純にデータストアに登録するだけである
+      // 第二引数の無名関数がルーティング成立時に実装する関数になる
+      // fragmentっていうのは実際にブラウザのURLに使われている【blog/1】のようなハッシュの内容の文字列を指している
       Backbone.history.route(route, function(fragment) {
+        
+        // ルーターに登録されている引数の情報を取り出す。
+        // 要は、blog/(:id)みたいな感じで仮に登録されていたとすると、[id, ...]みたいな配列にparseさせる役割を持つ
         var args = router._extractParameters(route, fragment);
+        
+        // router.executeにてルーティング時のcallbackを実行している
+        // falseならrouteイベントを実行しない、って言うことをやっているが.executeの評価結果は常にundefinedになるはずなので意味ない気がする。なんんだろうかこれは・・・・
         if (router.execute(callback, args, name) !== false) {
+          
+          
+          // ルーティング時にイベントを3つ発行している
+          // Routerの 【route:ルーティング名】, 引数にパラメータ
+          // Routerの 【route】, 引数にパラメーター
+          // historyの【route】, 引数にパラメーター
           router.trigger.apply(router, ['route:' + name].concat(args));
           router.trigger('route', name, args);
           Backbone.history.trigger('route', router, name, args);
@@ -1911,11 +1958,15 @@
 
     // Execute a route handler with the provided parameters.  This is an
     // excellent place to do pre-route setup or post-route cleanup.
+    // ルーターに登録されているcallbasckを実際に実行する役割を持つ
+    // 見ての通り、callbackの実行時のコンテキストはRouterになるので注意
     execute: function(callback, args, name) {
       if (callback) callback.apply(this, args);
     },
 
     // Simple proxy to `Backbone.history` to save a fragment into the history.
+    // Backbone.history.navigateへのショートカットの役割である。
+    // Backbone.history.navigateがどのような役割かはそっちの開設の時に
     navigate: function(fragment, options) {
       Backbone.history.navigate(fragment, options);
       return this;
@@ -1924,17 +1975,32 @@
     // Bind all defined routes to `Backbone.history`. We have to reverse the
     // order of the routes here to support behavior where the most general
     // routes can be defined at the bottom of the route map.
+    // .routesに定義されているルーティング情報の登録を行う
+    // Routerの役割はほぼこれが全てであり、定義されているルーティング情報をBackbone.historyに登録し、
+    // ルーティング完了時のcallbackを実行し、イベントを発行できるようにしているだけである。
     _bindRoutes: function() {
       if (!this.routes) return;
       this.routes = _.result(this, 'routes');
       var route, routes = _.keys(this.routes);
+      
+      // popによって後ろの要素から登録していってるのに注目!!
+      // ネタバレをすると、ルーティングに関する情報はBackbone.historyに全部登録されます
+      // その際はここでpopした要素をBackbone.history.handlersという配列にunshiftで追加していくので結果的にBackbone.Routerに登録されている順番で、最終的に登録されます。
+      // 最後に、フラグメント(URLのハッシュの文字列)にマッチしたルーティングを検索する際はBackbone.history.handlersを上から順番に探索していきます。
+      // 要は何を言いたいかというと、よくアクセスされるページはBackbone.Routerで定義する際になるべく小さいインデックスにすべきです。最終的な探索コストを減らすことができます
       while ((route = routes.pop()) != null) {
+        
+        // route: ルーティング時の名前, mypage,とかblog(/:id)とかの文字列が入る
+        // this.routes[route]: ↑に紐付いたルーティング成立時のcallbackの関数名or関数がはいる
+        // this.routeによって実際にルーティング情報を登録することができる
         this.route(route, this.routes[route]);
       }
     },
 
     // Convert a route string into a regular expression, suitable for matching
     // against the current location hash.
+    // 文字列を正規表現オブジェクトに変換することができる
+    // 何やってるか全く理解できないけど、これとかUnderscore.jsに組み込んだらいいんちゃうんかな？
     _routeToRegExp: function(route) {
       route = route.replace(escapeRegExp, '\\$&')
                    .replace(optionalParam, '(?:$1)?')
@@ -1948,8 +2014,15 @@
     // Given a route, and a URL fragment that it matches, return the array of
     // extracted decoded parameters. Empty or unmatched parameters will be
     // treated as `null` to normalize cross-browser behavior.
+    // URLのフラグメントの内容からRouterに登録している正規表現を元に配列を生成する
+    // 要は、blog/1みたいなフラグメントで、blog/(:id)みたいにRouterで登録していた際に[1]のような配列を生成させる
     _extractParameters: function(route, fragment) {
+
+      // 引数routeは正規表現オブジェクトなので、route.execはRegExp.prototype.execのことである
+      // https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec
+      // 文字列を正規表現オブジェクトで評価する
       var params = route.exec(fragment).slice(1);
+      
       return _.map(params, function(param, i) {
         // Don't decode the search params.
         if (i === params.length - 1) return param || null;
@@ -1967,11 +2040,25 @@
   // [onhashchange](https://developer.mozilla.org/en-US/docs/DOM/window.onhashchange)
   // and URL fragments. If the browser supports neither (old IE, natch),
   // falls back to polling.
+  //
+  //
+  // ここからBackbone.History
+  // Backbone.HistoryはHTML5のpushStateなどのAPIをラップすることで、URLの変更を管理し、Routerにイベントを発火させる仕組みを提供している
+  // pushStateなどに対応していないブラウザにも対応するために、独自のURL管理のためのポーリングの仕組みを提供することも行なっている
+  // -- おさらい --
+  // history.pushState: ブラウザの履歴を追加するための仕組み(HTML5のAPIのこと) 
+  // popStateイベント: 履歴を移動したら発火するイベント
+  // hashchangeイベント: URLのハッシュだけが変わった場合に発火するイベント 
   var History = Backbone.History = function() {
+    
+    // ルーティングの情報を格納するための配列
     this.handlers = [];
+    
+    // this.checkUrlをHistoryのコンテキストで実行できることを保証している
     this.checkUrl = _.bind(this.checkUrl, this);
 
     // Ensure that `History` can be used outside of the browser.
+    // window.location/window.historyのショートカットを作成する
     if (typeof window !== 'undefined') {
       this.location = window.location;
       this.history = window.history;
@@ -1988,13 +2075,16 @@
   var pathStripper = /#.*$/;
 
   // Has the history handling already been started?
+  // .startが実行されたかどうかをメモしておく。
+  // Backbone.Historyに直接メモすることでHistoryの実装を継承したものが仮に複数あったとしても、1つしか実行できないことを保証している
+  // Backbone.Historyはブラウザの状態(URL)などを直接管理するものなので、唯一無二であることが望ましい
   History.started = false;
 
   // Set up all inheritable **Backbone.History** properties and methods.
   _.extend(History.prototype, Events, {
 
-    // The default interval to poll for hash changes, if necessary, is
-    // twenty times a second.
+    // URLの変更を検知するためにポーリングの仕組みを利用するが
+    // そのポーリングの周期を定義している
     interval: 50,
 
     // Are we at the app root?
@@ -2040,6 +2130,8 @@
     },
 
     // Get the cross-browser normalized URL fragment from the path or hash.
+    // 現在のfragmentの文字列を取得する
+    // fragmentの文字列とは【router.html#mypage】でいうところの【mypage】みたいなものである
     getFragment: function(fragment) {
       if (fragment == null) {
         if (this._usePushState || !this._wantsHashChange) {
@@ -2053,22 +2145,40 @@
 
     // Start the hash change handling, returning `true` if the current URL matches
     // an existing route, and `false` otherwise.
+    // Backbone.Historyの起動コマンド
+    // 渡せるoptions
+    // silent: start実行時のfragmentを元にルーターに登録されているcallbackを即時実行するか否か
+    // hashChange: onhashChangeを使ったURLの変更管理を行うか否か
+    // pushState: pushStateを使ったURLの変更管理を行うか否か
+    // root: URLのどこを起点にルーターを設置するか。デフォルトでは【/】なっている。何かしらの理由で/mypageから始めたいとかの場合にこれを利用する
     start: function(options) {
+
+      // Backbone.Historyは実行中であれば、例外を返す
       if (History.started) throw new Error('Backbone.history has already been started');
       History.started = true;
 
       // Figure out the initial configuration. Do we need an iframe?
       // Is pushState desired ... is it available?
+      // rootと呼ばれるものは上書きすることができる。
+      // rootとは、URLのどこを起点にルーターを設置するかを決めるものだと思っていい
       this.options          = _.extend({root: '/'}, this.options, options);
-      this.root             = this.options.root;
+      this.root             = this.options.root
+      ;
+      // onhashchangeに対応しているブラウザかを確認して、結果をメンバに持たせる
+      // optionsにてhashChangeを使わない用に設定することも可能である
+      // ユーザーが使いたいかどうかと、ブラウザが対応しているかどうかの結果を元に、実際に使うか否かを評価している
       this._wantsHashChange = this.options.hashChange !== false;
       this._hasHashChange   = 'onhashchange' in window && (document.documentMode === void 0 || document.documentMode > 7);
       this._useHashChange   = this._wantsHashChange && this._hasHashChange;
+      
+      // onhashchangeと同じく、window.history.pushStateを使うか否かを評価している
       this._wantsPushState  = !!this.options.pushState;
       this._hasPushState    = !!(this.history && this.history.pushState);
       this._usePushState    = this._wantsPushState && this._hasPushState;
+      
+      // 現在のフラグメントの文字列を取得している
       this.fragment         = this.getFragment();
-
+      
       // Normalize root to always include a leading and trailing slash.
       this.root = ('/' + this.root + '/').replace(rootStripper, '/');
 
@@ -2095,6 +2205,7 @@
       // Proxy an iframe to handle location events if the browser doesn't
       // support the `hashchange` event, HTML5 history, or the user wants
       // `hashChange` but not `pushState`.
+      // pushStateもhashChangeも使わない・使えない場合はiframeを使って履歴管理を行う？
       if (!this._hasHashChange && this._wantsHashChange && !this._usePushState) {
         this.iframe = document.createElement('iframe');
         this.iframe.src = 'javascript:0';
@@ -2109,12 +2220,19 @@
       }
 
       // Add a cross-platform `addEventListener` shim for older browsers.
+      // これはaddEventListenerのクロスブラウザ対応の書き方
+      // addEventListenerが対応していないブラウザの場合はattachEventが実行される
+      // IE8以前のやつの対応になる 
       var addEventListener = window.addEventListener || function (eventName, listener) {
         return attachEvent('on' + eventName, listener);
       };
 
       // Depending on whether we're using pushState or hashes, and whether
       // 'onhashchange' is supported, determine how we check the URL state.
+      // pushStateを使えるばあい(使いたい場合)はpopstateにイベントを登録してURLを確認させてルーターのcallbackを実行させる
+      // pushStateを使わない場合はhashchangeにイベントを登録させてURLを確認させてルーターのcallbackを実行させる
+      // ↑の両方とも使わない場合(hashchangeっぽいことはやりたい)場合はポーリングさせ、URLを確認させてルーターのcallbackを実行させる
+      // 要はpopStateによる、URLの検知方法を優先して使います
       if (this._usePushState) {
         addEventListener('popstate', this.checkUrl, false);
       } else if (this._useHashChange && !this.iframe) {
@@ -2123,13 +2241,19 @@
         this._checkUrlInterval = setInterval(this.checkUrl, this.interval);
       }
 
+      // start時にsilentオプションを設定できる、これは現在のfragmentの情報を元に即時にRouterのcallbackを実行するかどうかを制御するためのものである。
+      // デフォルトではundefinedになっているので即時実行される。
       if (!this.options.silent) return this.loadUrl();
     },
 
     // Disable Backbone.history, perhaps temporarily. Not useful in a real app,
     // but possibly useful for unit testing Routers.
+    // Backbone.historyによる、URLの変更検知を止める
+    // 何かしらの色々なイベントやタイマーを止めるだけで特に特別なことはしていない
     stop: function() {
+      
       // Add a cross-platform `removeEventListener` shim for older browsers.
+      // addEventListenerの時と同じくIE8対応
       var removeEventListener = window.removeEventListener || function (eventName, listener) {
         return detachEvent('on' + eventName, listener);
       };
@@ -2149,18 +2273,25 @@
 
       // Some environments will throw when clearing an undefined interval.
       if (this._checkUrlInterval) clearInterval(this._checkUrlInterval);
+      
       History.started = false;
     },
 
     // Add a route to be tested when the fragment changes. Routes added later
     // may override previous routes.
+    // ルーティングの情報.handlersに保存する。
+    // 基本的にはBackbone.Routerのコンストラクタによって実行されて、Backbone.Routerで定義されているルーティング情報が登録されると思っておけば良い
+    // 要はBackbone.historyがルーティング情報を持つことになるので、結局Backbone.Routerは別に使わなくたっていい(routeイベントが発行されなくなるだけである)
     route: function(route, callback) {
       this.handlers.unshift({route: route, callback: callback});
     },
 
     // Checks the current URL to see if it has changed, and if it has,
     // calls `loadUrl`, normalizing across the hidden iframe.
+    // 現在のURLを元にルーターに登録されているcallbackを実行するためのメソッド
     checkUrl: function(e) {
+      
+      // 現在のフラグメントを取得
       var current = this.getFragment();
 
       // If the user pressed the back button, the iframe's hash will have
@@ -2177,11 +2308,16 @@
     // Attempt to load the current URL fragment. If a route succeeds with a
     // match, returns `true`. If no defined routes matches the fragment,
     // returns `false`.
+    // フラグメントの文字列を元にルーターにcallbackが存在するかを調べてマッチした場合にcallbackを実行する
+    // ルーティング情報はすべて正規表現のオブジェクトとしての検索キーを所有しているので、それを使ってフラグメントの文字列を評価する
     loadUrl: function(fragment) {
       // If the root doesn't match, no routes can match either.
       if (!this.matchRoot()) return false;
+      
+      // ここでBackbone.history.fragmentを更新している
       fragment = this.fragment = this.getFragment(fragment);
       return _.some(this.handlers, function(handler) {
+        // 正規表現オブジェクトを使ってルーティングが存在するかを評価
         if (handler.route.test(fragment)) {
           handler.callback(fragment);
           return true;
@@ -2196,11 +2332,20 @@
     // The options object can contain `trigger: true` if you wish to have the
     // route callback be fired (not usually desirable), or `replace: true`, if
     // you wish to modify the current URL without adding an entry to the history.
+    // フラグメントの内容をhistoryに保存させ、loadUrlを実行し、Routerに登録されているcallbackを実行する
+    // 保存するフラグメント(URLを決定させる文字列)とoptionsを引数に受ける
+    // optionsに設定できる項目
+    // trigger: Routerに登録されているcallbackを最終的に実行するかどうかを評価する
+    // replace: this.history.replaceState, this.history.pushStateのどっちを利用するかを決定することができる。要は上書きか・追加か
     navigate: function(fragment, options) {
       if (!History.started) return false;
+      
+      // optionsがtrueの場合は{trigger: true}に変換される
+      // optionsがundefinedの場合は{trigger: false}に変換される
       if (!options || options === true) options = {trigger: !!options};
 
       // Normalize the fragment.
+      // 現在のフラグメントを取得
       fragment = this.getFragment(fragment || '');
 
       // Don't include a trailing slash on the root.
@@ -2213,16 +2358,22 @@
       // Strip the hash and decode for matching.
       fragment = this.decodeFragment(fragment.replace(pathStripper, ''));
 
+      // fragmentに更新がない場合(URLのハッシュに変更がない場合)
+      // は何も処理をせずに終了する
       if (this.fragment === fragment) return;
       this.fragment = fragment;
 
       // If pushState is available, we use it to set the fragment as a real URL.
       if (this._usePushState) {
+        
+        // options.replaceの内容によって上書きでのhistory保存か、追加かを決定し、実行する
         this.history[options.replace ? 'replaceState' : 'pushState']({}, document.title, url);
 
       // If hash changes haven't been explicitly disabled, update the hash
       // fragment to store history.
       } else if (this._wantsHashChange) {
+        
+        // pushStateを利用しないでhashchangeでやりたい場合はURLのハッシュを上書きし、iframeを使っている場合はiframeのページの切り替えを行い、履歴を辿れるようにしている
         this._updateHash(this.location, fragment, options.replace);
         if (this.iframe && (fragment !== this.getHash(this.iframe.contentWindow))) {
           var iWindow = this.iframe.contentWindow;
@@ -2241,13 +2392,17 @@
       // If you've told us that you explicitly don't want fallback hashchange-
       // based history, then `navigate` becomes a page refresh.
       } else {
+        // pushState, hashchangeのどっちも対応していない場合は単純にリダイレクトさせる
         return this.location.assign(url);
       }
+      
+      // triggerオプションが指定されている場合はfragmentに対応したルーターのcallbackを実行することになる
       if (options.trigger) return this.loadUrl(fragment);
     },
 
     // Update the hash location, either replacing the current entry, or adding
     // a new one to the browser history.
+    // URLのハッシュの書き換えを行う
     _updateHash: function(location, fragment, replace) {
       if (replace) {
         var href = location.href.replace(/(javascript:|#).*$/, '');
@@ -2261,6 +2416,8 @@
   });
 
   // Create the default Backbone.history.
+  // ここでもうHistoryのインスタンスを作っているので
+  // Backbone.historyを扱う場合はBackbone.historyの参照を利用すべき
   Backbone.history = new History;
 
   // Helpers
