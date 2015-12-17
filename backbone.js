@@ -871,6 +871,8 @@
     // Fetch the model from the server, merging the response with the model's
     // local attributes. Any changed attributes will trigger a "change" event.
     // fetch/save/destroyに関してはRestなAPIの実行するためのヘルパーである
+    // Backbone.syncをreadメソッドで実行する(Model.urlにたいするGETリクエスト)
+    // 引数のoptionsはそのままBackbone.syncのoptionsとしても使われます。
     // Backbone.jsのここの仕組みを考慮したRestなAPIでは効果を発揮するがAPIの仕様がそれに合わない場合は何の役にも立たない
     // ここの仕組みをあえて、ユーザーのWebStorage領域に対するfetch/save/destroyなどに振る舞いを変えることをすれば別のいい使い方が有るかもしれない
     // 実際にそれをやっているっぽいライブラリも有る
@@ -878,13 +880,21 @@
     fetch: function(options) {
       options = _.extend({parse: true}, options);
       var model = this;
-      var success = options.success;
+      
+      // ajaxのsuccessのcallbackを上書きする
+      // 基本的にはレスポンスの内容(key/value)をmodelのattributesとして.setで登録することが役割である。
+      // また、successが評価された場合に『sync』イベントを発行する
+      var success = options.success;      
       options.success = function(resp) {
         var serverAttrs = options.parse ? model.parse(resp, options) : resp;
         if (!model.set(serverAttrs, options)) return false;
+        
+        // 元々定義していたsuccessを評価する
         if (success) success.call(options.context, model, resp, options);
         model.trigger('sync', model, resp, options);
       };
+      
+      // wrapErrorは『error』イベントを発行するためのユーティリティ
       wrapError(this, options);
       return this.sync('read', this, options);
     },
@@ -892,8 +902,14 @@
     // Set a hash of model attributes, and sync the model to the server.
     // If the server returns an attributes hash that differs, the model's
     // state will be `set` again.
+    // Backbone.syncを使って更新・登録処理をおこなう
+    // options.validate: validationを実行するかどうか
+    // options.parse: Model.parseにてattributesを加工するかどうか
+    // options.wait: HTTPリクエストをする前にModelのattributesを書き換えるか
     save: function(key, val, options) {
+      
       // Handle both `"key", value` and `{key: value}` -style arguments.
+      // 引数を→のように変換する{key, value}, options
       var attrs;
       if (key == null || typeof key === 'object') {
         attrs = key;
@@ -902,12 +918,15 @@
         (attrs = {})[key] = val;
       }
 
+      // saveの際もModel.setを利用するが、デフォルトではvaludate, parseを有効にする
       options = _.extend({validate: true, parse: true}, options);
       var wait = options.wait;
 
       // If we're not waiting and attributes exist, save acts as
       // `set(attr).save(null, opts)` with validation. Otherwise, check if
       // the model will be valid when the attributes, if any, are set.
+      // waitオプションが付いていない場合は先にthis.setを実行してModelのattributesを加工する
+      // waitオプションが付いている場合はajaxのsuccessのコールバックの後にModelのattributesを加工する
       if (attrs && !wait) {
         if (!this.set(attrs, options)) return false;
       } else {
@@ -919,13 +938,19 @@
       var model = this;
       var success = options.success;
       var attributes = this.attributes;
+      
+      // ajaxのsuccessのコールバックを定義しなおしている
+      // Model.setの実行や、syncイベントの発行をするため
       options.success = function(resp) {
         // Ensure attributes are restored during synchronous saves.
+        // HTTPリクエストの結果をparseしたものとModelのattributesの内容をマージさせてModelの状態を更新します
         model.attributes = attributes;
         var serverAttrs = options.parse ? model.parse(resp, options) : resp;
         if (wait) serverAttrs = _.extend({}, attrs, serverAttrs);
         if (serverAttrs && !model.set(serverAttrs, options)) return false;
         if (success) success.call(options.context, model, resp, options);
+        
+        // model.setが完了してからsyncイベントを発行する
         model.trigger('sync', model, resp, options);
       };
       wrapError(this, options);
@@ -933,6 +958,8 @@
       // Set temporary attributes if `{wait: true}` to properly find new ids.
       if (attrs && wait) this.attributes = _.extend({}, attributes, attrs);
 
+      // isNewでmodelにidが振られているかを確認する
+      // idが存在する場合はupdateとみなします
       var method = this.isNew() ? 'create' : (options.patch ? 'patch' : 'update');
       if (method === 'patch' && !options.attrs) options.attrs = attrs;
       var xhr = this.sync(method, this, options);
@@ -946,6 +973,9 @@
     // Destroy this model on the server if it was already persisted.
     // Optimistically removes the model from its collection, if it has one.
     // If `wait: true` is passed, waits for the server to respond before removal.
+    // Backbone.syncを使ってModelの削除を行います。
+    // Modelが購読しているイベントも削除します
+    // options.waitがある場合はHTTPリクエストの完了前にModelの削除を行います
     destroy: function(options) {
       options = options ? _.clone(options) : {};
       var model = this;
@@ -1783,30 +1813,49 @@
   // instead of `application/json` with the model in a param named `model`.
   // Useful when interfacing with server-side languages like **PHP** that make
   // it difficult to read the body of `PUT` requests.
+  // Backbone.syncはHTTPのリクエストを行うためのAPI
+  // 基本的にBackbone.syncを直接触ることは少なく、Backbone.Model.saveやBackbone.Collection.fetchなどの中でBackbone.syncを実行するようになっている
+  // method: HTTPのメソッド名に変換するための識別子。詳しくはmethodMapのオブジェクトを参照
+  // model: Backbone.Modelのインスタンス
+  // options: リクエストのbodyなど色々、最終的に$.ajax()の引数にも利用されます。要はここに{success: Function, error: Function}とか書く必要があります
   Backbone.sync = function(method, model, options) {
+    
+    // HTTPのメソッド名がtypeには入ることになる、GET, POSTなど
     var type = methodMap[method];
 
     // Default options, unless specified.
+    // optionsをオーバーライドする
+    // emulateHTTP, emulateJSONの役割に関しては他のところで説明しているので割愛する
     _.defaults(options || (options = {}), {
       emulateHTTP: Backbone.emulateHTTP,
       emulateJSON: Backbone.emulateJSON
     });
 
-    // Default JSON-request options.
+    // Default JSON-request options
+    // 変数paramsは最終的に$.ajax()の引数に使われます
     var params = {type: type, dataType: 'json'};
 
     // Ensure that we have a URL.
+    // options.urlが実装されていない場合はModel.urlを評価した結果を利用します。
+    // いづれかのurlを取得できない場合(実装されていない場合は)例外を発行します
+    // params.urlはHTTPのリクエストのエンドポイントです。
     if (!options.url) {
       params.url = _.result(model, 'url') || urlError();
     }
 
     // Ensure that we have the appropriate request data.
+    // params.data(HTTPのBODYにあたるところ)を決定するためのアルゴリズムです
+    // 
+    // 更新系のリクエストの場合
+    // options.attrsが実装されていればそれを利用します
+    // options.attrsが実装されていない場合はmodel.toJSON()の結果を利用します
     if (options.data == null && model && (method === 'create' || method === 'update' || method === 'patch')) {
       params.contentType = 'application/json';
       params.data = JSON.stringify(options.attrs || model.toJSON(options));
     }
 
     // For older servers, emulate JSON by encoding the request into an HTML-form.
+    // ここに関してもBackbone.emulateJSONで説明したので割愛
     if (options.emulateJSON) {
       params.contentType = 'application/x-www-form-urlencoded';
       params.data = params.data ? {model: params.data} : {};
@@ -1815,8 +1864,15 @@
     // For older servers, emulate HTTP by mimicking the HTTP method with `_method`
     // And an `X-HTTP-Method-Override` header.
     if (options.emulateHTTP && (type === 'PUT' || type === 'DELETE' || type === 'PATCH')) {
+
+    　// ここに関してもBackbone.emulateJSONで説明したので割愛
       params.type = 'POST';
       if (options.emulateJSON) params.data._method = type;
+     
+      // beforeSendはajaxで通信を行う直前に評価するメソッドです。
+      // 通信の直前でヘッダーの書き換えを行います。
+      // 仮にoptionsに対してbeforeSendが実装されていると、単純に上書きされてしまい、実装していたはずのbeforeSendが評価されなくなってしまうので
+      // 一旦、実装されているbeforeSendをキャッシュして多段的に実行するようになっています。
       var beforeSend = options.beforeSend;
       options.beforeSend = function(xhr) {
         xhr.setRequestHeader('X-HTTP-Method-Override', type);
@@ -1825,11 +1881,16 @@
     }
 
     // Don't process data on a non-GET request.
+    // dataに指定したオブジェクトをクエリ文字列に変換するかどうかを設定します。
+    // ajaxの機能です。GETリクエスト以外は不要です
     if (params.type !== 'GET' && !options.emulateJSON) {
       params.processData = false;
     }
 
     // Pass along `textStatus` and `errorThrown` from jQuery.
+    // エラーの際のハンドリング用のメソッドも少しカスタマイズして多段的に実行するようになっています
+    // 最終的にoptionsを引数に受けたModelの『request』イベントが発行されるのでその時にstatusを簡単に補足するためにoptionsのメンバを更新していますね
+    // Modelのイベント走らせるとかもいいと思うんですけどね。
     var error = options.error;
     options.error = function(xhr, textStatus, errorThrown) {
       options.textStatus = textStatus;
@@ -1838,12 +1899,16 @@
     };
 
     // Make the request, allowing the user to override any Ajax options.
+    // 実際に$.ajaxを実行してHTTPリクエストを飛ばしています。
+    // リクエストを飛ばした際にModelの『request』イベントを発行しています。
+    // リクエストが終了された時に発行されるイベントはありません。あったらloading画面の表示・非表示とか書きやすくなるんじゃないかなと思います。
     var xhr = options.xhr = Backbone.ajax(_.extend(params, options));
     model.trigger('request', model, xhr, options);
     return xhr;
   };
 
   // Map from CRUD to HTTP for our default `Backbone.sync` implementation.
+  // CURDベースの名前の付け方のものをHTTPのメソッド名に変換させます
   var methodMap = {
     'create': 'POST',
     'update': 'PUT',

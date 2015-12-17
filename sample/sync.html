@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf8'>
+  <title>Backbone Sample</title>
+</head>
+<body>
+<script src="vendor/jquery.js"></script>
+<script src="vendor/underscore.js"></script>
+<script src="../backbone.js"></script>
+<script>
+
+
+//////////////////////////////////////////////////
+// 下記のリクエストのHTTPメソッドは何になりますか?
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json'
+// });
+// var user  = new User();
+// 
+// Backbone.sync('POST', user, {});
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。リクエストは200で終了するものとします
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json'
+// });
+// var user  = new User();
+// user.on('request', function(){
+//   console.log('A');
+// })
+// 
+// Backbone.sync('read', user, {
+//   success: function(data){
+//     console.log('B');
+//   },
+//   error: function(xhr, textStatus, errorThrown){
+//     console.log(xhr);
+//     console.log(textStatus);
+//     console.log(errorThrown);
+//   },
+// });
+
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。リクエストは200で終了するものとします
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json'
+// });
+// var user  = new User();
+// 
+// Backbone.sync('read', user, {
+//   success: function(data){
+//     console.log('B');
+//   },
+//   error: function(xhr, textStatus, errorThrown){
+//     console.log(xhr);
+//     console.log(textStatus);
+//     console.log(errorThrown);
+//   },
+// });
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json'
+// });
+// var user  = new User();
+// user.on('sync', function(){
+//   console.log('a');
+// });
+// user.on('request', function(){
+//   console.log('b');
+// });
+// user.on('change', function(){
+//   console.log('c');
+// });
+// user.fetch();
+
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json',
+//   parse: function(attributes)
+//   {
+//     return {data: attributes};
+//   }
+// });
+// var user  = new User();
+// user.on('sync', function(){
+//   console.log(this.toJSON());
+// });
+// user.fetch();
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。
+//////////////////////////////////////////////////
+/// var User = Backbone.Model.extend({
+///   url: './user.json',
+/// });
+/// var user  = new User({name: 'Hoge', age: 10});
+/// user.save('age', 30, {
+///   success: function()
+///   {
+///     console.log(this.toJSON());
+///   }.bind(user)
+/// });
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。
+//////////////////////////////////////////////////
+// var User = Backbone.Model.extend({
+//   url: './user.json',
+// });
+// var user  = new User({name: 'Hoge', age: 10});
+// 
+// user.save('age', 30);
+// console.log(user.toJSON());
+// 
+// user.save('age', 40, {wait: true});
+// console.log(user.toJSON());
+// 
+// setTimeout(function(){
+//   console.log(user.toJSON());
+// }, 1000);
+
+
+//////////////////////////////////////////////////
+// 以下を実行すると、コンソールにどのように出力されるでしょうか。
+//////////////////////////////////////////////////
+// var Smoker = Backbone.Model.extend({
+//   defaults: {age: 0},
+//   url: './user.json',
+//   validate: function(attrs){
+//     return attrs.age >= 20 ? null: new Error('age');
+//   }
+// });
+// var smoker = new Smoker();
+// smoker.on('invalid', function(){ console.log('invalid');});
+// smoker.on('error', function(){ console.log('error');});
+// smoker.on('sync', function(){ console.log('sync');});
+// smoker.save('age', 18, {
+//   success: function()
+//   {
+//     console.log('success');
+//   }
+// });
+
+
+</script>
+</html>
